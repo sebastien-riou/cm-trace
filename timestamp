@@ -1,0 +1,7 @@
+#!/bin/bash
+
+TS=$EPOCHSECONDS
+if [ -z "${TS}" ]; then
+    TS=`python3 -c 'import time; print(int(time.time()))'`
+fi
+echo $TS
