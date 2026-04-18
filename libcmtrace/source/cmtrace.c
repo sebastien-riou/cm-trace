@@ -5,10 +5,21 @@
 
 #include "cm.h"
 
+#define CMTRACE_ASCII_OUT 0
+
+#if CMTRACE_ASCII_OUT
+#define CMTRACE_TRACE_CALLER 1
+#else
+#define CMTRACE_TRACE_CALLER 0
+#endif
+
 #define DWT_FUNC0_CYCMATCH 			(1<<7)
 #define DWT_FUNC0_GEN_WATCHPOINT 	4
 
 int __io_putchar(int ch);
+int __io_getchar(void);
+
+
 
 __attribute__((weak)) void cmtrace_clear_caches(){
 }
@@ -20,6 +31,55 @@ __attribute__((weak)) void cmtrace_com_tx(const void*buf, unsigned int size){
     }
 }
 
+__attribute__((weak)) void cmtrace_com_rx(void*buf, unsigned int size){
+    uint8_t*buf8 = (uint8_t*)buf;
+    for(unsigned int i=0;i<size;i++){
+        buf8[i] = __io_getchar();
+    }
+}
+#if CMTRACE_ASCII_OUT
+void dump_core(uintptr_t addr, uintptr_t size, uintptr_t display_addr){
+  printf("@0x%08x, %u bytes:\n\r",display_addr, size);
+  uint8_t*r = (uint8_t*)addr;
+  uint32_t cnt=1;
+  while(size){
+    printf("%02x ",*r++);
+    size--;
+	if(0 == cnt%4) printf(" ");
+	cnt++;
+  }
+  printf("\n\r");
+}
+
+void dump(uintptr_t addr, uintptr_t size){
+  dump_core(addr,size,addr);
+}
+
+#define DUMPI(val) dump((uintptr_t)&val,sizeof val)
+#endif
+
+#if CMTRACE_ASCII_OUT
+	//void cmtrace_tx_init(uint32_t total_cycles){printf("total cycles, including call/ret and timer read = %lu\n",total_cycles);}
+	void cmtrace_tx_init(){printf("cmtrace_tx_init\n");}
+	void cmtrace_tx_done(uint32_t total_cycles){printf("total cycles, target function only = %lu\n",total_cycles);}
+	void cmtrace_tx_pc(uint32_t pc){printf("PC=0x%08lx\n",pc);}
+	//void cmtrace_tx_sp(uint32_t sp){printf("SP=0x%08lx\n",sp);}
+	void cmtrace_tx_cy(uint32_t cy){printf("%6lu ",cy);}
+#else
+	void cmtrace_tx_init(){
+		const uint8_t hello[] = "cmtrace";
+		cmtrace_com_tx(hello,8);
+	}
+	void cmtrace_tx_done(uint32_t total_cycles){
+		const uint32_t ff = 0xFFFFFFFF;
+		cmtrace_com_tx(&ff,4);
+		cmtrace_com_tx(&total_cycles,4);
+	}
+	void cmtrace_tx_pc(uint32_t pc){cmtrace_com_tx(&pc,4);}
+	//void cmtrace_tx_sp(uint32_t sp){cmtrace_com_tx(&sp,4);}
+	void cmtrace_tx_cy(uint32_t cy){cmtrace_com_tx(&cy,4);}
+#endif
+
 void dwt_stop(){
 	DWT->CTRL &= 0xFFFFFFFE ; // disable counter
 }
@@ -28,7 +88,7 @@ void dwt_run(){
 }
 void dwt_init(){
 	if ((CoreDebug->DHCSR & 0x1) != 0) {
-		printf("Halting Debug Enabled - Please reset\n");
+		printf("ERROR: Halting Debug Enabled - Please reset\n");
 		while(1);
 	}
 	// code to set up debug monitor mode
@@ -59,7 +119,6 @@ uint32_t dwt_read_cycles(){
 }
 void stepper_entry();
 void stepper_next();
-void stepper_done();
 
 bool stepper_start_done;
 bool stepper_end_done;
@@ -70,38 +129,53 @@ volatile uint32_t stepper_end_cycles;
 volatile uint32_t stepper_total_cycles;
 volatile uint32_t stepper_cycles;
 cmtrace_target_t stepper_target;
+
 void stepper_core(){
 	const uint32_t start = DWT->CYCCNT;
 	stepper_target();
 	const uint32_t end = DWT->CYCCNT;
 	dwt_stop();
-	stepper_start_cycles = start;
-	stepper_end_cycles = end;
-	stepper_total_cycles = stepper_end_cycles-stepper_start_cycles;
-	if(0xFFFFFFFF!=stepper_cycles){
-		stepper_done();
+    if(0xFFFFFFFF==stepper_cycles){
+        //free run trial
+        stepper_start_cycles = start;
+	    stepper_end_cycles = end;
+	    stepper_total_cycles = stepper_end_cycles-stepper_start_cycles;
 	}
 }
+
 void stepper(){
 	cmtrace_clear_caches();
 	dwt_setup_as_timer(stepper_cycles);
 	stepper_core();
 }
+
 void cmtrace_init(cmtrace_target_t target){
-    stepper_target = target;
+	cmtrace_tx_init();
+	target = (cmtrace_target_t)((uintptr_t)target | 1);//force thumb bit
+	stepper_target = target;
 	stepper_start_done=0;
 	stepper_end_done=0;
 	stepper_cycles=0xFFFFFFFF;
 	stepper_last_pc = 0xFFFFFFFF;
 	stepper_target_return_address = 0xFFFFFFFF;
 	dwt_init();
-	stepper();
-	const uint32_t min_dwt = stepper_start_cycles-2;
-	printf("stepper calibration: min_dwt = %lu\n",min_dwt);
-	printf("total cycles = %lu\n",stepper_total_cycles);
-	stepper_cycles = min_dwt;
 	stepper_entry();
-	printf("stepper done\n");
+	const uint32_t min_dwt = stepper_start_cycles-2;
+    cmtrace_tx_cy(stepper_total_cycles);
+	if(CMTRACE_ASCII_OUT){
+	    printf("stepper calibration: min_dwt = %lu\n",min_dwt);
+    }
+    stepper_cycles = min_dwt;
+	stepper_entry();
+    cmtrace_tx_done(stepper_total_cycles);
+}
+
+void cmtrace_start(){
+	uint32_t target;
+	while(1){
+		cmtrace_com_rx(&target,4);
+		cmtrace_init((cmtrace_target_t) target);
+	}
 }
 
 typedef struct __attribute__((packed)) ContextStateFrame {
@@ -125,30 +199,55 @@ void dump_dfsr(){
 	const bool is_halt_dbg_evt = (dfsr & dfsr_halt_evt_bitmask);
 	printf("DFSR:  0x%08lx (bkpt=%d, halt=%d, dwt=%d)", dfsr,(int)is_bkpt_dbg_evt, (int)is_halt_dbg_evt,(int)is_dwt_dbg_evt);
 }
-
+extern uint32_t stepper_entry_sp;
 void stepper_debug_monitor_handler(sContextStateFrame *frame){
+	if(CMTRACE_ASCII_OUT){
+		printf("stepper_debug_monitor_handler:");
+	}
 	const uint32_t dfsr_dwt_evt_bitmask = (1 << 2);
 	if(!stepper_start_done){
 		const uint32_t start_target = (uint32_t)(stepper_target) & 0xFFFFFFFE;
 		if(frame->return_address == start_target){
-			printf("---- start ----\n");
+            if(CMTRACE_TRACE_CALLER) {
+			    printf("---- start ----\n");
+            }
 			stepper_start_done=1;
+            stepper_start_cycles=stepper_cycles;
 			stepper_target_return_address = frame->lr & 0xFFFFFFFE;
 		}
 	}
 	if(!stepper_end_done){
 		if(frame->return_address == stepper_target_return_address){
-			printf("---- end ----\n");
-			stepper_end_done=1;
+            if(CMTRACE_TRACE_CALLER) {
+			    printf("---- end ----\n");
+            }
+			stepper_end_done = 1;
+            stepper_end_cycles = stepper_cycles;
+            stepper_total_cycles = 1 + stepper_end_cycles - stepper_start_cycles;
 		}
 	}
-	printf("%6lu: PC=0x%08lx\n",stepper_cycles,frame->return_address);
+	if((stepper_start_done && !stepper_end_done) || CMTRACE_TRACE_CALLER){
+        if(stepper_start_done) {
+            cmtrace_tx_cy(1 + stepper_cycles - stepper_start_cycles);
+        }else{
+            cmtrace_tx_cy(stepper_cycles);
+        }
+        cmtrace_tx_pc(frame->return_address);
+		//printf("LR=0x%08lx\n",frame->lr);
+		//printf("SP=0x%08x\n",(uintptr_t)(frame+1));
+		//printf("stepper_entry_sp=0x%08x\n",stepper_entry_sp);
+		//dump((uintptr_t)frame,sizeof(sContextStateFrame));
+		//dump((uintptr_t)(frame+1),64);
+    }
 
 	dwt_stop();
 	DWT->CYCCNT = 0; // reset the counter
 	SCB->DFSR = dfsr_dwt_evt_bitmask; //clear IRQ event mask
-	stepper_cycles++;
-	frame->return_address = (uint32_t)stepper_next;
+	if(!stepper_end_done || CMTRACE_TRACE_CALLER){
+        stepper_cycles++;
+	    frame->return_address = (uint32_t)stepper_next;
+		frame->xpsr &= 0xFF000000;
+    }
 }
 __attribute__((naked)) void DebugMon_Handler(void){
   __asm volatile(
