@@ -8,7 +8,79 @@ from pysatl import Utils
 def timestamp() -> str:
     now = datetime.datetime.now()
     return now.strftime('%Y%m%d-%H:%M:%S')
-rx_log = bytearray()
+
+def cmtrace(binary, func_name, out_dir=None):
+    image = Elf(elf=args.binary, binutils_prefix='arm-none-eabi-')
+    logging.debug(image.functions_by_name.keys())
+    func = image.functions_by_name[func_name]
+    func_start = func['start']
+    func_last = func['last_ins_addr']
+
+    logging.info(f'{args.func} address range: {func_start:#08x} to {func_last:#08x}')
+
+    outfile = f'{os.path.basename(binary)}-{func_name}.cmtrace'
+    if out_dir:
+        outfile = os.path.join(out_dir,outfile)
+
+    with serial.Serial(device_path, baudrate=115200, exclusive=True) as device:
+        device.flush()
+        device.reset_input_buffer()    
+
+        def device_write32(x: int):
+            device.write(x.to_bytes(4,byteorder='little'))
+        
+        rx_log = bytearray()
+        def device_read(size: int = 1):
+            nonlocal rx_log
+            dat = device.read(size)
+            rx_log += dat
+            return dat
+        
+        def device_read32() -> int:
+            return int.from_bytes(device_read(4),byteorder='little')
+        
+        with open(outfile,'wb') as f:
+            def f_write32(x: int):
+                f.write(x.to_bytes(4,byteorder='little'))
+            def f_read32() -> int:
+                return int.from_bytes(f.read(4),byteorder='little')
+
+            device_write32(func_start)
+            hello = device_read(8)
+            if hello != b'cmtrace\0':
+                raise RuntimeError(f'hello = {hello} ({Utils.hexstr(hello)})')
+            free_run_cycles = device_read32()
+            cnt = 1
+            last_pc = None
+            last_cnt = 1
+            ins_cnt=0
+            def add_instruction():
+                nonlocal ins_cnt
+                ins_cnt += 1
+                pc_cycles = cnt - last_cnt
+                logging.info(f'PC={last_pc:#08x}: {pc_cycles} ({image.addresses[last_pc]['ins']})')
+                f_write32(pc)
+                f_write32(pc_cycles)
+            while True:
+                cy = device_read32()
+                if cy == 0xFFFFFFFF:
+                    break
+                if cy != cnt:
+                    raise RuntimeError(f'cnt={cnt}, cy={cy} ({cy:#08x})\n{Utils.hexstr(rx_log)}')
+                pc = device_read32()
+                logging.debug(f'PC={pc:#08x} ({cy:6})')
+                if last_pc and last_pc != pc:
+                    add_instruction()
+                    last_cnt = cnt
+                cnt += 1
+                last_pc = pc
+            add_instruction()
+            total_cycles = device_read32()
+            if total_cycles != cnt:
+                raise RuntimeError(f'cnt={cnt}, total_cycles={total_cycles}')
+            print(f'{func_name}: {ins_cnt} instructions, {total_cycles} cycles ({free_run_cycles} cycles measured in freerun)')
+
+
 if __name__ == "__main__":
     scriptname = os.path.basename(__file__)
     parser = argparse.ArgumentParser(scriptname)
@@ -35,63 +107,4 @@ if __name__ == "__main__":
     logdatefmt = '%Y-%m-%d %H:%M:%S'
     logging.basicConfig(level=args.log_level, format=logformat, datefmt=logdatefmt)
 
-    image = Elf(elf=args.binary, binutils_prefix='arm-none-eabi-')
-    logging.debug(image.functions_by_name.keys())
-    func = image.functions_by_name[args.func]
-    func_start = func['start']
-    func_last = func['last_ins_addr']
-
-    logging.info(f'{args.func} address range: {func_start:#08x} to {func_last:#08x}')
-
-    outfile = f'{timestamp()}-{args.func}.cmtrace'
-    if args.out_dir:
-        outfile = os.path.join(args.out_dir,outfile)
-
-    with serial.Serial(device_path, baudrate=115200, exclusive=True) as device:
-        def device_write32(x: int):
-            device.write(x.to_bytes(4,byteorder='little'))
-        
-        def device_read(size: int = 1):
-            global rx_log
-            dat = device.read(size)
-            rx_log += dat
-            return dat
-        
-        def device_read32() -> int:
-            return int.from_bytes(device_read(4),byteorder='little')
-        
-        with open(outfile,'wb') as f:
-            def f_write32(x: int):
-                f.write(x.to_bytes(4,byteorder='little'))
-            def f_read32() -> int:
-                return int.from_bytes(f.read(4),byteorder='little')
-
-            device.reset_input_buffer()
-            device_write32(func_start)
-            hello = device_read(8)
-            if hello != b'cmtrace\0':
-                raise RuntimeError(f'hello = {hello} ({Utils.hexstr(hello)})')
-            free_run_cycles = device_read32()
-            cnt = 1
-            last_pc = None
-            last_cnt = 1
-            def add_instruction():
-                pc_cycles = cnt - last_cnt
-                logging.info(f'PC={last_pc:#08x}: {pc_cycles} ({image.addresses[last_pc]['ins']})')
-                f_write32(pc)
-                f_write32(pc_cycles)
-            while True:
-                cy = device_read32()
-                if cy == 0xFFFFFFFF:
-                    break
-                if cy != cnt:
-                    raise RuntimeError(f'cnt={cnt}, cy={cy} ({cy:#08x})\n{Utils.hexstr(rx_log)}')
-                pc = device_read32()
-                logging.debug(f'PC={pc:#08x} ({cy:6})')
-                if last_pc and last_pc != pc:
-                    add_instruction()
-                    last_cnt = cnt
-                cnt += 1
-                last_pc = pc
-            add_instruction()
-            total_cycles = device.read(4)
+    cmtrace(args.binary, args.func, args.out_dir)

@@ -3,6 +3,7 @@ set(LIB cmtrace)
 add_library(${LIB} STATIC 
         ${CMAKE_CURRENT_SOURCE_DIR}/source/cmtrace.c
         ${CMAKE_CURRENT_SOURCE_DIR}/source/cmtrace_asm.S 
+        ${CMAKE_CURRENT_SOURCE_DIR}/source/test_targets.c
     )
 
 target_include_directories(${LIB}

@@ -9,3 +9,7 @@ void cmtrace_clear_caches();
 void cmtrace_start();
 void cmtrace_init(cmtrace_target_t target);
 
+//test functions
+void test_umul64_16_16();
+void test_umul64_32_16();
+void test_umul64_32_32();
