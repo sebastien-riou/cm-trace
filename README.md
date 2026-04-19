@@ -1,5 +1,5 @@
 # cm-trace
-Cycle accurate trace for Cortex-M, for real (I am looking at you ETM...)
+Cycle accurate trace for ARM Cortex-M, for real (I am looking at you ETM...)
 
 ## Concept
 1. Setup:

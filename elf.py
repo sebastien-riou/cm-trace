@@ -86,7 +86,7 @@ class Elf:
             out.append(section)
         self._sections = out
         return out
-    
+
     def read_functions_from_symbol_table(self) -> list:
         # report a subset of what is reported with read_functions and give less details. size is not always accurate (for example _fini may appear as 0 byte)
         outstr = self.objdump(self._elf_file, '--all-headers')
@@ -96,7 +96,7 @@ class Elf:
         line_cnt = 0
         for line in lines:
             line_cnt += 1
-            #print("%03d: "%line_cnt)
+            # print("%03d: "%line_cnt)
             r = re.search(syms_func_regex, line)
             if r is not None:
                 addr_str = r.group(1)
@@ -108,7 +108,9 @@ class Elf:
                     func_name = func_name.split(' ')[-1]
                 addr = int(addr_str, 16)
                 size = int(size_str, 16)
-                functions.append({'name':func_name, 'start':addr, 'size':size, 'section':section, 'attributes':attributes})
+                functions.append(
+                    {'name': func_name, 'start': addr, 'size': size, 'section': section, 'attributes': attributes}
+                )
         return functions
 
     def read_functions(self) -> list:
@@ -126,13 +128,13 @@ class Elf:
         new_func = False
         for line in lines:
             line_cnt += 1
-            #print("%03d: "%line_cnt)
+            # print("%03d: "%line_cnt)
             r = re.search(func_regex, line)
             if r is not None:
                 addr_str = r.group(1)
                 func_name = r.group(2)
                 if func_name.startswith('$'):
-                    continue #not a real function
+                    continue  # not a real function
                 addr = int(addr_str, 16)
                 if current_func is not None:
                     size = last_addr + last_size - functions[-1]['start']
@@ -141,24 +143,24 @@ class Elf:
                             aliases[current_func] = []
                         aliases[current_func].append(func_name)
                         continue
-                    #print("Closing func '%s'"%current_func)
+                    # print("Closing func '%s'"%current_func)
                     functions[-1]['size'] = size
                     functions[-1]['last_ins_addr'] = last_addr
-                        
-                func = {'name':func_name, 'start': addr, 'exits': []}
+
+                func = {'name': func_name, 'start': addr, 'exits': []}
                 self._functions_by_name[func_name] = func
                 functions.append(func)
                 current_func = func_name
                 last_addr = addr
                 last_size = 0
                 new_func = True
-                #print("Starting func '%s'"%func_name)
+                # print("Starting func '%s'"%func_name)
             elif current_func:
                 line = re.sub('<.*>', '', line)
                 line = line.strip()
                 r = re.search(ins_regex, line)
                 if r is not None:
-                    #print('Parsing instruction')
+                    # print('Parsing instruction')
                     addr_str = r.group(1)
                     code_str = r.group(2)
                     ins = r.group(3)
@@ -220,13 +222,13 @@ class Elf:
         if self._functions is None:
             self.read_functions()
         return self._functions
-    
+
     @property
     def addresses(self):
         if self._addresses is None:
             self.read_functions()
         return self._addresses
-    
+
     @property
     def functions_by_name(self):
         if self._functions is None:
