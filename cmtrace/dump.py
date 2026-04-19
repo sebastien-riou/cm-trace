@@ -3,7 +3,8 @@ import logging
 from cmtrace import CmTrace
 import os
 
-if __name__ == '__main__':
+
+def main():
     scriptname = os.path.basename(__file__)
     parser = argparse.ArgumentParser(scriptname)
     levels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
@@ -19,3 +20,7 @@ if __name__ == '__main__':
     trace = CmTrace.from_file(args.trace_path)
     logging.debug(f'{trace.instruction_count} instructions, {trace.total_cycles} cycles')
     trace.dump()
+
+
+if __name__ == '__main__':
+    main()

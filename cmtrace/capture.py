@@ -6,7 +6,8 @@ import serial
 
 from cmtrace import CmTrace
 
-if __name__ == '__main__':
+
+def main():
     scriptname = os.path.basename(__file__)
     parser = argparse.ArgumentParser(scriptname)
     levels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
@@ -30,3 +31,7 @@ if __name__ == '__main__':
     tracer = CmTrace(args.binary, args.func, setup_func_name=args.setup)
     with serial.Serial(device_path, baudrate=115200, exclusive=True) as device:
         tracer.capture(device, out_dir=args.out_dir)
+
+
+if __name__ == '__main__':
+    main()
