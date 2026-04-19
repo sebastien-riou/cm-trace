@@ -6,8 +6,8 @@ typedef void (*cmtrace_target_t)(void);
 void cmtrace_clear_caches();
 
 //functions to use "as is"
-void cmtrace_start();
-void cmtrace_init(cmtrace_target_t target);
+void cmtrace_trace_loop();
+void cmtrace_trace(cmtrace_target_t target);
 
 //test functions
 void test_umul64_16_16();

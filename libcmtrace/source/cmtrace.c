@@ -170,7 +170,7 @@ void stepper(){
 	stepper_core();
 }
 
-void cmtrace_init(cmtrace_target_t target){
+void cmtrace_trace(cmtrace_target_t target){
 	cmtrace_tx_init();
 	target = (cmtrace_target_t)((uintptr_t)target | 1);//force thumb bit
 	stepper_target = target;
@@ -189,11 +189,11 @@ void cmtrace_init(cmtrace_target_t target){
     cmtrace_tx_done(stepper_total_cycles);
 }
 
-void cmtrace_start(){
+void cmtrace_trace_loop(){
 	uint32_t target;
 	while(1){
 		cmtrace_com_rx(&target,4);
-		cmtrace_init((cmtrace_target_t) target);
+		cmtrace_trace((cmtrace_target_t) target);
 	}
 }
 

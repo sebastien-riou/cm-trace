@@ -1,11 +1,11 @@
 #include <stdint.h>
-__attribute__((optimize("align-functions=4"))) uint64_t umul64(uint64_t a, uint64_t b){
+__attribute__((optimize("align-functions=4"),noinline)) uint64_t umul64(uint64_t a, uint64_t b){
 	return a*b;
 }
 
 volatile uint64_t vbuf64[2] = {0};
 volatile uint64_t sink64;
-__attribute__((optimize("align-functions=4"))) void test_umul64_core(){
+__attribute__((optimize("align-functions=4"),noinline)) void test_umul64_core(){
 	sink64 = umul64(vbuf64[0],vbuf64[1]);
 }
 __attribute__((optimize("align-functions=4"))) void test_umul64_16_16(){
