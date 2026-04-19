@@ -2,7 +2,7 @@ import datetime
 import logging
 import os
 
-from elf import Elf
+from cmtrace.elf import Elf
 
 try:
     from pysatl import Utils
