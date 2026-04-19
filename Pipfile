@@ -4,12 +4,13 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-pysatl = "*"
 pyserial = "*"
-black = "*"
-ruff = "*"
 
 [dev-packages]
+pysatl = "*"
+black = "*"
+ruff = "*"
+build = "*"
 
 [requires]
 python_version = "3.12"

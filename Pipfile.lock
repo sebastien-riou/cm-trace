@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "c106cf7c719a5e26e48216c8d5ac7a1161aa2d52b56cf951803ec1f48417c880"
+            "sha256": "8a372d7a8b2bf45d1eeeebe0da2476363d1a731550ef6425e61b59b70b67da5b"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -16,6 +16,16 @@
         ]
     },
     "default": {
+        "pyserial": {
+            "hashes": [
+                "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb",
+                "sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0"
+            ],
+            "index": "pypi",
+            "version": "==3.5"
+        }
+    },
+    "develop": {
         "black": {
             "hashes": [
                 "sha256:0126ae5b7c09957da2bdbd91a9ba1207453feada9e9fe51992848658c6c8e01c",
@@ -49,6 +59,15 @@
             "index": "pypi",
             "markers": "python_version >= '3.10'",
             "version": "==26.3.1"
+        },
+        "build": {
+            "hashes": [
+                "sha256:1bc22b19b383303de8f2c8554c9a32894a58d3f185fe3756b0b20d255bee9a38",
+                "sha256:5aa4231ae0e807efdf1fd0623e07366eca2ab215921345a2e38acdd5d0fa0a74"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.9'",
+            "version": "==1.4.3"
         },
         "click": {
             "hashes": [
@@ -90,6 +109,14 @@
             "markers": "python_version >= '3.10'",
             "version": "==4.9.6"
         },
+        "pyproject-hooks": {
+            "hashes": [
+                "sha256:1e859bd5c40fae9448642dd871adf459e5e2084186e8d2c2a79a824c970da1f8",
+                "sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913"
+            ],
+            "markers": "python_version >= '3.7'",
+            "version": "==1.2.0"
+        },
         "pysatl": {
             "hashes": [
                 "sha256:9a832e1a35c99d2169df4d0e5367a976f7506d0288c95830cf1a8958abc045f2",
@@ -98,14 +125,6 @@
             "index": "pypi",
             "markers": "python_version >= '3.6'",
             "version": "==1.2.6"
-        },
-        "pyserial": {
-            "hashes": [
-                "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb",
-                "sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0"
-            ],
-            "index": "pypi",
-            "version": "==3.5"
         },
         "pytokens": {
             "hashes": [
@@ -180,6 +199,5 @@
             "markers": "python_version >= '3.7'",
             "version": "==0.15.11"
         }
-    },
-    "develop": {}
+    }
 }

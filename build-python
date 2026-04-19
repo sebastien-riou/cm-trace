@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$1" ]
+then
+      py="pipenv run python"
+else
+      py=$1
+fi
+
+rm -rf dist
+rm -rf build # C build dir is mistaken for the module 'build'
+git fetch --all
+git status
+$py -m build
+

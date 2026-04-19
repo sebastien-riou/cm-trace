@@ -3,7 +3,7 @@
 set -e
 
 echo "Running 'black'"
-black .
+pipenv run black .
 
 echo "Running 'ruff'"
-ruff check --fix
+pipenv run ruff check --fix
