@@ -9,8 +9,10 @@
 
 #if CMTRACE_ASCII_OUT
 #define CMTRACE_TRACE_CALLER 1
+#define PRINTF(...) printf( __VA_ARGS__ )
 #else
 #define CMTRACE_TRACE_CALLER 0
+#define PRINTF(...)
 #endif
 
 #define DWT_FUNC0_CYCMATCH 			(1<<7)
@@ -18,8 +20,6 @@
 
 int __io_putchar(int ch);
 int __io_getchar(void);
-
-
 
 __attribute__((weak)) void cmtrace_clear_caches(){
 }
@@ -50,12 +50,20 @@ void dump_core(uintptr_t addr, uintptr_t size, uintptr_t display_addr){
   }
   printf("\n\r");
 }
-
 void dump(uintptr_t addr, uintptr_t size){
   dump_core(addr,size,addr);
 }
-
 #define DUMPI(val) dump((uintptr_t)&val,sizeof val)
+void dump_dfsr(){
+	const uint32_t dfsr_dwt_evt_bitmask = (1 << 2);
+	const uint32_t dfsr_bkpt_evt_bitmask = (1 << 1);
+	const uint32_t dfsr_halt_evt_bitmask = (1 << 0);
+    const uint32_t dfsr = SCB->DFSR;
+	const bool is_dwt_dbg_evt = (dfsr & dfsr_dwt_evt_bitmask);
+	const bool is_bkpt_dbg_evt = (dfsr & dfsr_bkpt_evt_bitmask);
+	const bool is_halt_dbg_evt = (dfsr & dfsr_halt_evt_bitmask);
+	PRINTF("DFSR:  0x%08lx (bkpt=%d, halt=%d, dwt=%d)", dfsr,(int)is_bkpt_dbg_evt, (int)is_halt_dbg_evt,(int)is_dwt_dbg_evt);
+}
 #endif
 
 #if CMTRACE_ASCII_OUT
@@ -87,6 +95,8 @@ void dwt_run(){
 	DWT->CTRL |= 1 ; // enable counter
 }
 void dwt_init(){
+	static bool done=0;
+	if(done) return;
 	if ((CoreDebug->DHCSR & 0x1) != 0) {
 		printf("ERROR: Halting Debug Enabled - Please reset\n");
 		while(1);
@@ -100,6 +110,7 @@ void dwt_init(){
 	ITM->LAR = 0xC5ACCE55; // enable access
 	dwt_stop();
 	DWT->CYCCNT = 0; // reset the counter
+	done=1;
 }
 
 void dwt_setup_as_timer(uint32_t cycles){
@@ -112,6 +123,15 @@ void dwt_setup_as_timer(uint32_t cycles){
     #endif
 	DWT->FUNCTION0 = DWT_FUNC0_CYCMATCH | DWT_FUNC0_GEN_WATCHPOINT;
 	__enable_irq();
+	PRINTF("setup as timer. ");
+	if(DWT->CYCCNT){
+		PRINTF("ERROR: DWT->CYCCNT not 0!\n");
+		while(1);
+	}
+	if(DWT->COMP0 != cycles){
+		PRINTF("ERROR: DWT->COMP0 not equal to cycles!\n");
+		while(1);
+	}
 	dwt_run();
 }
 uint32_t dwt_read_cycles(){
@@ -135,6 +155,7 @@ void stepper_core(){
 	stepper_target();
 	const uint32_t end = DWT->CYCCNT;
 	dwt_stop();
+	PRINTF("start=%lu, end=%lu.",start,end);
     if(0xFFFFFFFF==stepper_cycles){
         //free run trial
         stepper_start_cycles = start;
@@ -162,9 +183,7 @@ void cmtrace_init(cmtrace_target_t target){
 	stepper_entry();
 	const uint32_t min_dwt = stepper_start_cycles-2;
     cmtrace_tx_cy(stepper_total_cycles);
-	if(CMTRACE_ASCII_OUT){
-	    printf("stepper calibration: min_dwt = %lu\n",min_dwt);
-    }
+	PRINTF("stepper calibration: min_dwt = %lu\n",min_dwt);
     stepper_cycles = min_dwt;
 	stepper_entry();
     cmtrace_tx_done(stepper_total_cycles);
@@ -189,28 +208,15 @@ typedef struct __attribute__((packed)) ContextStateFrame {
   uint32_t xpsr;
 } sContextStateFrame;
 
-void dump_dfsr(){
-	const uint32_t dfsr_dwt_evt_bitmask = (1 << 2);
-	const uint32_t dfsr_bkpt_evt_bitmask = (1 << 1);
-	const uint32_t dfsr_halt_evt_bitmask = (1 << 0);
-    const uint32_t dfsr = SCB->DFSR;
-	const bool is_dwt_dbg_evt = (dfsr & dfsr_dwt_evt_bitmask);
-	const bool is_bkpt_dbg_evt = (dfsr & dfsr_bkpt_evt_bitmask);
-	const bool is_halt_dbg_evt = (dfsr & dfsr_halt_evt_bitmask);
-	printf("DFSR:  0x%08lx (bkpt=%d, halt=%d, dwt=%d)", dfsr,(int)is_bkpt_dbg_evt, (int)is_halt_dbg_evt,(int)is_dwt_dbg_evt);
-}
+
 extern uint32_t stepper_entry_sp;
 void stepper_debug_monitor_handler(sContextStateFrame *frame){
-	if(CMTRACE_ASCII_OUT){
-		printf("stepper_debug_monitor_handler:");
-	}
+	PRINTF("stepper_debug_monitor_handler:");
 	const uint32_t dfsr_dwt_evt_bitmask = (1 << 2);
 	if(!stepper_start_done){
 		const uint32_t start_target = (uint32_t)(stepper_target) & 0xFFFFFFFE;
 		if(frame->return_address == start_target){
-            if(CMTRACE_TRACE_CALLER) {
-			    printf("---- start ----\n");
-            }
+            PRINTF("---- start ----\n");
 			stepper_start_done=1;
             stepper_start_cycles=stepper_cycles;
 			stepper_target_return_address = frame->lr & 0xFFFFFFFE;
@@ -218,9 +224,7 @@ void stepper_debug_monitor_handler(sContextStateFrame *frame){
 	}
 	if(!stepper_end_done){
 		if(frame->return_address == stepper_target_return_address){
-            if(CMTRACE_TRACE_CALLER) {
-			    printf("---- end ----\n");
-            }
+            PRINTF("---- end ----\n");
 			stepper_end_done = 1;
             stepper_end_cycles = stepper_cycles;
             stepper_total_cycles = 1 + stepper_end_cycles - stepper_start_cycles;
