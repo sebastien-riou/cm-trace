@@ -20,6 +20,7 @@ It has been tested only Cortex-M3 and Cortex-M4.
         - mandatory:
             - `__io_putchar`
             - `__io_getchar`
+            - set the debug monitor IRQ vector to `DebugMon_Handler`
         - optional:
             - `cmtrace_clear_caches`
     - Invoke `cmtrace_trace_loop` in your app
@@ -81,7 +82,7 @@ $ pipenv run cmtrace-dump test-stm32f411.elf-test_umul64_32_16.cmtrace
 1. X = 0
 2. Setup:
     - Clean the caches
-    - Setup a timer interrupt at time X 
+    - Setup DWT timer interrupt at time X 
 3. Run the target function
 4. Handle interrupt
     - if return address is end address, exit
