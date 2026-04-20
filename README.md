@@ -3,6 +3,7 @@ Cycle accurate trace for ARM Cortex-M, for real (I am looking at you ETM...)
 
 It targets Cortex-M3 and 'higher' (meaning any Cortex-M to date bar M0,M0+ and M1).
 
+## Development status
 It succesfully build on:
 - M3
 - M4
@@ -11,7 +12,8 @@ It succesfully build on:
 
 Others have not been attempted yet.
 
-It has been tested only Cortex-M3 and Cortex-M4. 
+It has been tested only Cortex-M3 and Cortex-M4. Both are working reasonably well on small functions. For large functions, a random failure
+gets in the way. That bug is under investigation, I intend to fix it. 
 
 ## Overview
 - In the embedded code:

@@ -13,3 +13,8 @@ void cmtrace_trace(cmtrace_target_t target);
 void test_umul64_16_16();
 void test_umul64_32_16();
 void test_umul64_32_32();
+void test_loop64_4();
+void test_loop64_32();
+void test_loop64_256();
+void test_loop64_100k();
+void include_test_functions();
