@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include "cmtrace.h"
 
-#include "cm.h"
+
 
 #define CMTRACE_ASCII_OUT 0
 
@@ -15,8 +15,6 @@
 #define PRINTF(...)
 #endif
 
-#define DWT_FUNC0_CYCMATCH 			(1<<7)
-#define DWT_FUNC0_GEN_WATCHPOINT 	4
 
 int __io_putchar(int ch);
 int __io_getchar(void);
@@ -54,16 +52,7 @@ void dump(uintptr_t addr, uintptr_t size){
   dump_core(addr,size,addr);
 }
 #define DUMPI(val) dump((uintptr_t)&val,sizeof val)
-void dump_dfsr(){
-	const uint32_t dfsr_dwt_evt_bitmask = (1 << 2);
-	const uint32_t dfsr_bkpt_evt_bitmask = (1 << 1);
-	const uint32_t dfsr_halt_evt_bitmask = (1 << 0);
-    const uint32_t dfsr = SCB->DFSR;
-	const bool is_dwt_dbg_evt = (dfsr & dfsr_dwt_evt_bitmask);
-	const bool is_bkpt_dbg_evt = (dfsr & dfsr_bkpt_evt_bitmask);
-	const bool is_halt_dbg_evt = (dfsr & dfsr_halt_evt_bitmask);
-	PRINTF("DFSR:  0x%08lx (bkpt=%d, halt=%d, dwt=%d)", dfsr,(int)is_bkpt_dbg_evt, (int)is_halt_dbg_evt,(int)is_dwt_dbg_evt);
-}
+
 #endif
 
 #if CMTRACE_ASCII_OUT
@@ -88,55 +77,6 @@ void dump_dfsr(){
 	void cmtrace_tx_cy(uint32_t cy){cmtrace_com_tx(&cy,4);}
 #endif
 
-void dwt_stop(){
-	DWT->CTRL &= 0xFFFFFFFE ; // disable counter
-}
-void dwt_run(){
-	DWT->CTRL |= 1 ; // enable counter
-}
-void dwt_init(){
-	static bool done=0;
-	if(done) return;
-	if ((CoreDebug->DHCSR & 0x1) != 0) {
-		printf("ERROR: Halting Debug Enabled - Please reset\n");
-		while(1);
-	}
-	// code to set up debug monitor mode
-	const uint32_t mon_en_bit = 16;
-	CoreDebug->DEMCR |= 1 << mon_en_bit;
-	// Priority for DebugMonitor Exception is bits[7:0]
-	SCB->SHP[3] = 0x00;//highest prio
-	CoreDebug->DEMCR |= 0x01000000;
-	ITM->LAR = 0xC5ACCE55; // enable access
-	dwt_stop();
-	DWT->CYCCNT = 0; // reset the counter
-	done=1;
-}
-
-void dwt_setup_as_timer(uint32_t cycles){
-	dwt_stop();
-	//setup break point based on clock cycles
-	DWT->CYCCNT = 0; // reset the counter
-	DWT->COMP0 = cycles;
-    #if __CORTEX_M < 23
-	DWT->MASK0 = 0;
-    #endif
-	DWT->FUNCTION0 = DWT_FUNC0_CYCMATCH | DWT_FUNC0_GEN_WATCHPOINT;
-	__enable_irq();
-	PRINTF("setup as timer. ");
-	if(DWT->CYCCNT){
-		PRINTF("ERROR: DWT->CYCCNT not 0!\n");
-		while(1);
-	}
-	if(DWT->COMP0 != cycles){
-		PRINTF("ERROR: DWT->COMP0 not equal to cycles!\n");
-		while(1);
-	}
-	dwt_run();
-}
-uint32_t dwt_read_cycles(){
-	return DWT->CYCCNT;
-}
 void stepper_entry();
 void stepper_next();
 
@@ -151,10 +91,10 @@ volatile uint32_t stepper_cycles;
 cmtrace_target_t stepper_target;
 
 void stepper_core(){
-	const uint32_t start = DWT->CYCCNT;
+	const uint32_t start = cmtrace_timer_read();
 	stepper_target();
-	const uint32_t end = DWT->CYCCNT;
-	dwt_stop();
+	const uint32_t end = cmtrace_timer_read();
+	cmtrace_timer_stop();
 	PRINTF("start=%lu, end=%lu.",start,end);
     if(0xFFFFFFFF==stepper_cycles){
         //free run trial
@@ -166,7 +106,7 @@ void stepper_core(){
 
 void stepper(){
 	cmtrace_clear_caches();
-	dwt_setup_as_timer(stepper_cycles);
+	cmtrace_timer_start(stepper_cycles);
 	stepper_core();
 }
 
@@ -179,12 +119,12 @@ void cmtrace_trace(cmtrace_target_t target){
 	stepper_cycles=0xFFFFFFFF;
 	stepper_last_pc = 0xFFFFFFFF;
 	stepper_target_return_address = 0xFFFFFFFF;
-	dwt_init();
+	cmtrace_timer_init();
 	stepper_entry();
-	const uint32_t min_dwt = stepper_start_cycles-2;
+	const uint32_t min_cnt = stepper_start_cycles-2;
     cmtrace_tx_cy(stepper_total_cycles);
-	PRINTF("stepper calibration: min_dwt = %lu\n",min_dwt);
-    stepper_cycles = min_dwt;
+	PRINTF("stepper calibration: min_cnt = %lu\n",min_cnt);
+    stepper_cycles = min_cnt;
 	stepper_entry();
     cmtrace_tx_done(stepper_total_cycles);
 }
@@ -210,9 +150,8 @@ typedef struct __attribute__((packed)) ContextStateFrame {
 
 
 extern uint32_t stepper_entry_sp;
-void stepper_debug_monitor_handler(sContextStateFrame *frame){
-	PRINTF("stepper_debug_monitor_handler:");
-	const uint32_t dfsr_dwt_evt_bitmask = (1 << 2);
+void stepper_handler(sContextStateFrame *frame){
+	PRINTF("stepper_handler:");
 	if(!stepper_start_done){
 		const uint32_t start_target = (uint32_t)(stepper_target) & 0xFFFFFFFE;
 		if(frame->return_address == start_target){
@@ -244,20 +183,19 @@ void stepper_debug_monitor_handler(sContextStateFrame *frame){
 		//dump((uintptr_t)(frame+1),64);
     }
 
-	dwt_stop();
-	DWT->CYCCNT = 0; // reset the counter
-	SCB->DFSR = dfsr_dwt_evt_bitmask; //clear IRQ event mask
+	cmtrace_timer_irq_ack();
+	
 	if(!stepper_end_done || CMTRACE_TRACE_CALLER){
         stepper_cycles++;
 	    frame->return_address = (uint32_t)stepper_next;
 		frame->xpsr &= 0xFF000000;
     }
 }
-__attribute__((naked)) void DebugMon_Handler(void){
+__attribute__((naked)) void cmtrace_timer_irq_handler(void){
   __asm volatile(
       "tst lr, #4 \n"
       "ite eq \n"
       "mrseq r0, msp \n"
       "mrsne r0, psp \n"
-      "b stepper_debug_monitor_handler \n");
+      "b stepper_handler \n");
 }
