@@ -37,6 +37,59 @@ def read_str(src) -> str:
     return src.read(size).decode()
 
 
+class CustomScale(object):
+    @property
+    def name(self):
+        return self._name
+    
+    def __init__(self, name, start, end, records,*,sep='|',first_address=None,last_address=None):
+        self._name = name
+        self._start = start
+        self._end = end
+        self._sep = sep
+        if first_address:
+            self._first_address = first_address
+        else:
+            self._first_address = records[0]['pc']
+        if last_address:
+            self._last_address = last_address
+        else:
+            self._last_address = records[-1]['pc']
+        scy = 0
+        for r in records:
+            if r['pc'] == self._first_address:
+                self._range_first_cycle = scy
+            scy += r['cycles']
+            if r['pc'] == self._last_address:
+                self._range_last_cycle = scy - 1 
+            
+        self._scale = (end - start) / (self._range_last_cycle+1 - self._range_first_cycle)
+        self._padlen = len(name+' first')
+
+    def header(self):
+        first = f'{self._name} first'
+        last = f'{self._name} last'
+        return f'{self._sep}{first:>{self._padlen}}{self._sep}{last:>{self._padlen}}'
+    
+    def instruction(self,first_cycle, last_cycle):
+        if first_cycle < self._range_first_cycle or last_cycle > self._range_last_cycle:
+            return f'{self._sep}{'':>{self._padlen}}{self._sep}{'':>{self._padlen}}'
+        start_offset_in_cycles = first_cycle - self._range_first_cycle
+        start_offset = int(start_offset_in_cycles * self._scale)
+        if last_cycle == self._range_last_cycle:
+            last_offset = self._end 
+        else:
+            last_offset_in_cycles = last_cycle+1 - self._range_first_cycle
+            last_offset = int(last_offset_in_cycles * self._scale)-1
+        return f'{self._sep}{start_offset:>{self._padlen}}{self._sep}{last_offset:>{self._padlen}}'
+
+
+class NullCustomScale(object):
+    def header(self):
+        return ''
+    def instruction(self,first_cycle, last_cycle):
+        return ''
+
 class CmTrace:
     RECORD_SIZE = 8  # (PC, cycles)
     EPILOG_SIZE = 8  # (number of instructions, total cycles)
@@ -86,17 +139,25 @@ class CmTrace:
         for i in range(0, self.instruction_count):
             yield self._get_record(i)
 
-    def dump(self):
-        sep = '|'
-        print(f"{'index':>6}{sep}{'PC':>10}{sep}{'opcode':>6}{sep}{'cycles':>6}{sep}{'cycles sum':>10}")  # noqa T201
-        index = 1
+    def dump(self,*,custom_scale=None,sep='|'):
+        if custom_scale is None:
+            custom_scale = NullCustomScale()
+        print(f"{'index':>6}{sep}{'PC':>10}{sep}{'opcode':>6}{sep}{'cycles':>6}{sep}{'first cycle':>11}{sep}{'last cycle':>10}{custom_scale.header()}")  # noqa T201
+        index = 0
         scy = 0
         for r in self.get_records():
+            first_cycle = scy
             scy += r['cycles']
+            last_cycle = scy - 1
             print(  # noqa T201
-                f"{index:6}{sep}0x{r['pc']:08x}{sep}{self._image.addresses[r['pc']]['ins']:>6}{sep}{r['cycles']:6}{sep}{scy:10}"
+                f"{index:6}{sep}0x{r['pc']:08x}{sep}{self._image.addresses[r['pc']]['ins']:>6}{sep}{r['cycles']:6}{sep}{first_cycle:11}{sep}{last_cycle:10}{custom_scale.instruction(first_cycle, last_cycle)}"
             )
             index += 1
+        if self.instruction_count != index:
+            raise RuntimeError(f'instruction count mismatch: {self.instruction_count} vs {index}')
+        if self.total_cycles != scy:
+            raise RuntimeError(f'total cycles mismatch: {self.total_cycles} vs {scy}')
+        print(f'{self.instruction_count} instructions, {self.total_cycles} cycles')  # noqa T201
 
     @staticmethod
     def from_file(trace_path):
