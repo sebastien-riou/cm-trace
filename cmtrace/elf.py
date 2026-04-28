@@ -32,7 +32,8 @@ class Elf:
     def get_tmp_file():
         file = os.path.join(tempfile.mkdtemp(), 'elf.tmp')
         return file
-
+    
+    
     def read_file_format(self):
         outstr = self.objdump(self._elf_file, '-a')
         info_line = r'\s*\S+:\s+file format\s+(\S+)'
@@ -146,6 +147,7 @@ class Elf:
                     # print("Closing func '%s'"%current_func)
                     functions[-1]['size'] = size
                     functions[-1]['last_ins_addr'] = last_addr
+                    # last instruction is not necessarily an exit! functions[-1]['exits'].append(last_addr)
 
                 func = {'name': func_name, 'start': addr, 'exits': []}
                 self._functions_by_name[func_name] = func
@@ -241,8 +243,21 @@ class Elf:
             self.read_functions()
         return self._functions_aliases
 
-    def __init__(self, elf, *, binutils_prefix='riscv-none-elf-'):
-        self._elf_file = elf
+    @staticmethod
+    def from_bytes(elf_as_bytes: bytes, *, binutils_prefix='riscv-none-elf-'):
+        tmp = Elf.get_tmp_file()
+        with open(tmp,'wb') as f:
+            f.write(elf_as_bytes)
+        return Elf(tmp,binutils_prefix)
+    
+    def __init__(self, elf:str|bytes, *, binutils_prefix='riscv-none-elf-'):
+        if isinstance(elf, str):
+            self._elf_file = elf
+        else:
+            self._elf_file = Elf.get_tmp_file()
+            with open(self._elf_file,'wb') as f:
+                f.write(elf)
+            logging.debug(f'tmp file: {self._elf_file}')
         self._binutils_prefix = binutils_prefix
         self._objdump_path = shutil.which(binutils_prefix + 'objdump')
         self._objcopy_path = shutil.which(binutils_prefix + 'objcopy')

@@ -1,5 +1,4 @@
 import argparse
-from html import parser
 import logging
 from cmtrace import CmTrace, CustomScale
 import os
