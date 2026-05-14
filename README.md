@@ -40,7 +40,7 @@ Function traced in the example:
    c:	4770      	bx	lr
 ````
 
-Example of output highlighting the difference between Cortex-M3 and Cortex-M4 for `umull` instruction :
+Example of output highlighting the difference between Cortex-M3 (STM32F207) and Cortex-M4 (STM32F411) for `umull` instruction :
 ````
 $ pipenv run cmtrace-dump cmtrace-stm32f207.elf-test_umul64_16_16.cmtrace 
  index|        PC|opcode|cycles|cycles sum
@@ -49,13 +49,6 @@ $ pipenv run cmtrace-dump cmtrace-stm32f207.elf-test_umul64_16_16.cmtrace
      3|0x080020c0| umull|     3|         7
      4|0x080020c4|   add|     1|         8
      5|0x080020c6|    bx|     1|         9
-$ pipenv run cmtrace-dump cmtrace-stm32f207.elf-test_umul64_32_16.cmtrace 
- index|        PC|opcode|cycles|cycles sum
-     1|0x080020ba|  muls|     2|         2
-     2|0x080020bc|   mla|     2|         4
-     3|0x080020c0| umull|     4|         8
-     4|0x080020c4|   add|     1|         9
-     5|0x080020c6|    bx|     1|        10
 $ pipenv run cmtrace-dump test-stm32f411.elf-test_umul64_16_16.cmtrace 
  index|        PC|opcode|cycles|cycles sum
      1|0x0800294c| mul.w|     2|         2
@@ -63,6 +56,13 @@ $ pipenv run cmtrace-dump test-stm32f411.elf-test_umul64_16_16.cmtrace
      3|0x08002954| umull|     1|         5
      4|0x08002958|   add|     1|         6
      5|0x0800295a|    bx|     1|         7
+$ pipenv run cmtrace-dump cmtrace-stm32f207.elf-test_umul64_32_16.cmtrace 
+ index|        PC|opcode|cycles|cycles sum
+     1|0x080020ba|  muls|     2|         2
+     2|0x080020bc|   mla|     2|         4
+     3|0x080020c0| umull|     4|         8
+     4|0x080020c4|   add|     1|         9
+     5|0x080020c6|    bx|     1|        10
 $ pipenv run cmtrace-dump test-stm32f411.elf-test_umul64_32_16.cmtrace 
  index|        PC|opcode|cycles|cycles sum
      1|0x0800294c| mul.w|     2|         2
