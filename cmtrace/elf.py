@@ -177,8 +177,8 @@ class Elf:
                         funcs = [current_func]
                         if current_func in aliases:
                             funcs += aliases[current_func]
-                    else:
-                        funcs = []
+                    #else:
+                    #    funcs = []
                     addresses[addr] = {
                         'code': code,
                         'size': size,

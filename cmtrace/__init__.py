@@ -112,6 +112,24 @@ class CmTrace:
     @property
     def total_cycles(self):
         return self._total_cycles
+    
+    @property
+    def executed_funcs(self):
+        if self._executed_funcs is None:
+            self._analyze_call_stack()
+        return self._executed_funcs
+
+    @property
+    def call_stack(self):
+        if self._call_stack is None:
+            self._analyze_call_stack()
+        return self._call_stack
+    
+    @property
+    def records(self):
+        if self._records is None:
+            self._get_records()
+        return self._records
 
     def __init__(self, elf:str|bytes, func_name, setup_func_name: str = ''):
         self._image = Elf(elf=elf, binutils_prefix='arm-none-eabi-')
@@ -134,6 +152,10 @@ class CmTrace:
         self._setup_func_start = self._setup_func['start']
         self._setup_func_last = self._setup_func['last_ins_addr']
 
+        self._executed_funcs = None
+        self._call_stack = None
+        self._records = None
+
         if self._setup_func != self._func:
             logging.debug(f'{self._setup_func_name:20}: {self._setup_func_start:#08x} to {self._setup_func_last:#08x}')
 
@@ -146,17 +168,80 @@ class CmTrace:
             cy = read32(f)
             return {'pc': pc, 'cycles': cy}
 
-    def get_records(self):
-        for i in range(0, self.instruction_count):
-            yield self._get_record(i)
+    #def get_records(self):
+    #    for i in range(0, self.instruction_count):
+    #        yield self._get_record(i)
 
-    def dump(self,*,custom_scale=None,sep='|'):
+    def _get_records(self):
+        self._records = []
+        for i in range(0, self.instruction_count):
+            self._records.append(self._get_record(i))
+
+    def _analyze_call_stack(self):
+        functions = []
+        call_stack = [] # live call stack
+        def is_in_call_stack(func) -> int|None:
+            for i in range(len(call_stack)):
+                cs_record = call_stack[i]
+                if func == cs_record['func']:
+                    return i
+            return None
+        self._call_stack = [] # represent the whole history of the call stack
+        previous_r = None
+        scy = 0
+        for r in self.records:
+            logging.debug(f'{r}')
+            logging.debug(f'{self._image.addresses[r['pc']]}')
+            pc_functions = self._image.addresses[r['pc']]['functions']
+            if len(pc_functions) == 0:
+                raise RuntimeError(f'Reached address {r['pc']:#x} which is not associated with any function')
+            func_name = pc_functions[0] # in case of multiple functions sharing the same address, we take the first one
+            func = self._image.functions_by_name[func_name]
+            if len(call_stack) == 0 or func != call_stack[-1]['func']:
+                if func not in functions:
+                    functions.append(func)
+                    logging.debug(f'add function {func}')
+                    func['calls'] = [] # list of cycle count for each call
+                    func['total_cycles'] = 0
+                cs_level = is_in_call_stack(func)
+                if cs_level is None: # new function call, push to stack
+                    logging.debug('function call')
+                    if previous_r:
+                        ra = previous_r['pc'] + self._image.addresses[previous_r['pc']]['size']
+                        caller=previous_r['pc']
+                    else:
+                        ra = -1 # ensure we never match this address
+                        caller = -1
+                    call_index = len(func['calls'])
+                    call_stack.append({'func':func,'call_idx':call_index,'return_addr':ra})
+                    func['calls'].append({'cycles':0,'caller':caller})
+                    event = 'call'
+                else:
+                    logging.debug('function return')
+                    ra = call_stack[cs_level+1]['return_addr']
+                    if r['pc'] != ra:
+                        logging.warning(f"pc={r['pc']}, ra={ra}")
+                    del call_stack[cs_level+1:]
+                    call_index = call_stack[-1]['call_idx']
+                    event = 'return'
+                self._call_stack.append({'level':len(call_stack), 'func':func, 'call_index':call_index, 'event':event, 'cycle':scy})
+                r['call_stack_event'] = self._call_stack[-1]
+            func['calls'][call_stack[-1]['call_idx']]['cycles'] += r['cycles']
+            func['total_cycles'] += r['cycles']
+            previous_r = r
+            scy += r['cycles']
+        logging.debug(f'functions: {functions}')
+        self._executed_funcs = functions
+    
+    def dump(self,*,custom_scale=None,sep='|',function=None):
         if custom_scale is None:
             custom_scale = NullCustomScale()
-        print(f"{'index':>6}{sep}{'PC':>10}{sep}{'opcode':>6}{sep}{'cycles':>6}{sep}{'first cycle':>11}{sep}{'last cycle':>10}{custom_scale.header()}{sep}{'functions':>30}")  # noqa T201
+        print(f"{'index':>6}{sep}{'PC':>10}{sep}{'opcode':>7}{sep}{'cycles':>6}{sep}{'first cycle':>11}{sep}{'last cycle':>10}{custom_scale.header()}{sep}{'functions':>30}{sep}{'event'}")  # noqa T201
         index = 0
         scy = 0
-        for r in self.get_records():
+        self._analyze_call_stack()
+        printed = True
+        for r in self.records:
             first_cycle = scy
             scy += r['cycles']
             last_cycle = scy - 1
@@ -165,9 +250,22 @@ class CmTrace:
             functions = ''
             if 'functions' in address:
                 functions = address['functions']
-            print(  # noqa T201
-                f"{index:6}{sep}0x{r['pc']:08x}{sep}{ins:>6}{sep}{r['cycles']:6}{sep}{first_cycle:11}{sep}{last_cycle:10}{custom_scale.instruction(first_cycle, last_cycle)}{sep}{functions}"
-            )
+                evt = ''
+            if 'call_stack_event' in r:
+                evt = f"{r['call_stack_event']['event']}, call_index={r['call_stack_event']['call_index']}, level={r['call_stack_event']['level']}"
+            print_it = True
+            if function is not None:
+                if not function in functions:
+                    print_it = False
+            if print_it:
+                print(  # noqa T201
+                    f"{index:6}{sep}0x{r['pc']:08x}{sep}{ins:>7}{sep}{r['cycles']:6}{sep}{first_cycle:11}{sep}{last_cycle:10}{custom_scale.instruction(first_cycle, last_cycle)}{sep}{functions}{sep}{evt}"
+                )
+                printed = True
+            else:
+                if printed:
+                    print('...')
+                printed = False
             index += 1
         if self.instruction_count != index:
             raise RuntimeError(f'instruction count mismatch: {self.instruction_count} vs {index}')
@@ -176,50 +274,39 @@ class CmTrace:
         print(f'{self.instruction_count} instructions, {self.total_cycles} cycles')  # noqa T201
 
     def breakdown(self,*,sep='|'):
-        functions = []
-        call_stack = []
-        previous_r = None
-        for r in self.get_records():
-            logging.debug(f'{r}')
-            logging.debug(f'{self._image.addresses[r['pc']]}')
-            pc_functions = self._image.addresses[r['pc']]['functions']
-            if len(pc_functions) > 0: # if instruction is an entry point of a function
-                func_name = pc_functions[0] # in case of multiple functions sharing the same address, we take the first one
-                func = self._image.functions_by_name[func_name]
-                if func not in functions:
-                    functions.append(func)
-                    logging.debug(f'add function {func}')
-                    func['calls'] = [] # list of cycle count for each call
-                    func['total_cycles'] = 0
-                if len(call_stack) == 0 or func != call_stack[-1]['func']: # new function call, push to stack
-                    if previous_r:
-                        ra = previous_r['pc'] + self._image.addresses[previous_r['pc']]['size']
-                    else:
-                        ra = -1 # ensure we never match this address
-                    call_stack.append({'func':func,'call_idx':len(func['calls']),'return_addr':ra})
-                    func['calls'].append(0)
-            elif len(call_stack) > 0 and r['pc'] == call_stack[-1]['return_addr']: # return from current function
-                call_stack.pop()
-                func = call_stack[-1]['func']
-
-            func['calls'][call_stack[-1]['call_idx']] += r['cycles']
-            func['total_cycles'] += r['cycles']
-            previous_r = r
+        functions = self.executed_funcs
         logging.debug(f'functions: {functions}')
         functions.sort(key=lambda f: f['total_cycles'], reverse=True)
         func_name_len = max(len(f['name']) for f in functions)
-        print(f"{'function':>{func_name_len}}{sep}{'calls':>6}{sep}{'%':>6}{sep}{'total cycles':>12}{sep}{'min cycles':>10}{sep}{'max cycles':>10}{sep}{'not CT':>6}")  # noqa T201
+        print(f"{'function':>{func_name_len}}{sep}{'calls':>6}{sep}{'%':>6}{sep}{'total cycles':>12}{sep}{'min cycles':>10}{sep}{'max cycles':>10}{sep}{'CT by call site':>15}{sep}{'indexes if not CT':>17}")  # noqa T201
         for func in functions:
-            min_cycles = min(func['calls'])
-            min_cycles_idx = func['calls'].index(min_cycles)
-            max_cycles = max(func['calls'])
-            max_cycles_idx = func['calls'].index(max_cycles)
+            callers = [d['caller'] for d in func['calls']]
+            caller_cycles = []
+            min_cycles = 1 << 64
+            max_cycles = 0
+            ct_for_each_caller = 'True'
+            for caller in callers:
+                cycles = [d['cycles'] for d in func['calls'] if d['caller'] == caller]
+                caller_min_cycles = min(cycles)
+                caller_max_cycles = max(cycles)
+                if caller_min_cycles != caller_max_cycles:
+                    ct_for_each_caller = 'False'
+                caller_cycles.append({'min':caller_min_cycles, 'max':caller_max_cycles})
+                min_cycles = min(min_cycles,caller_min_cycles)
+                max_cycles = max(max_cycles,caller_max_cycles)
+            def find(lst, key, value):
+                for i, dic in enumerate(lst):
+                    if dic[key] == value:
+                        return i
+                return None
+            min_cycles_idx = find(func['calls'],'cycles',min_cycles)
+            max_cycles_idx = find(func['calls'],'cycles',max_cycles)
             if min_cycles == max_cycles:
                 not_ct = ''            
             else:
                 not_ct = f'min: {min_cycles_idx}, max: {max_cycles_idx}'
             print(  # noqa T201
-                f"{func['name']:>{func_name_len}}{sep}{len(func['calls']):6}{sep}{func['total_cycles']*100/self.total_cycles:6.2f}{sep}{func['total_cycles']:>12}{sep}{min_cycles:>10}{sep}{max_cycles:>10}{sep}{not_ct:>6}"
+                f"{func['name']:>{func_name_len}}{sep}{len(func['calls']):6}{sep}{func['total_cycles']*100/self.total_cycles:6.2f}{sep}{func['total_cycles']:>12}{sep}{min_cycles:>10}{sep}{max_cycles:>10}{sep}{ct_for_each_caller:>15}{sep}{not_ct:>17}"
             )
 
 
