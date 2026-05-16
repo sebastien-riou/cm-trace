@@ -125,6 +125,7 @@ void cmtrace_trace(cmtrace_target_t target){
     cmtrace_tx_cy(stepper_total_cycles);
 	PRINTF("stepper calibration: min_cnt = %lu\n",min_cnt);
     stepper_cycles = min_cnt;
+	stepper_last_pc = 0xFFFFFFFF;
 	stepper_entry();
     cmtrace_tx_done(stepper_total_cycles);
 }
@@ -170,19 +171,26 @@ void stepper_handler(sContextStateFrame *frame){
 		}
 	}
 	if((stepper_start_done && !stepper_end_done) || CMTRACE_TRACE_CALLER){
+		uint32_t cy;
         if(stepper_start_done) {
-            cmtrace_tx_cy(1 + stepper_cycles - stepper_start_cycles);
+            cy = 1 + stepper_cycles - stepper_start_cycles;
         }else{
-            cmtrace_tx_cy(stepper_cycles);
+            cy = stepper_cycles;
         }
-        cmtrace_tx_pc(frame->return_address);
-		//printf("LR=0x%08lx\n",frame->lr);
-		//printf("SP=0x%08x\n",(uintptr_t)(frame+1));
-		//printf("stepper_entry_sp=0x%08x\n",stepper_entry_sp);
-		//dump((uintptr_t)frame,sizeof(sContextStateFrame));
-		//dump((uintptr_t)(frame+1),64);
+		const uint32_t delta = 0x40 + frame->return_address - stepper_last_pc;
+		if ( (delta & 0xFFFFFF80) || CMTRACE_ASCII_OUT || (stepper_last_pc == 0xFFFFFFFF)){
+			cmtrace_tx_cy((cy << 8) | 0xFE);
+        	cmtrace_tx_pc(frame->return_address);
+			//printf("LR=0x%08lx\n",frame->lr);
+			//printf("SP=0x%08x\n",(uintptr_t)(frame+1));
+			//printf("stepper_entry_sp=0x%08x\n",stepper_entry_sp);
+			//dump((uintptr_t)frame,sizeof(sContextStateFrame));
+			//dump((uintptr_t)(frame+1),64);
+		} else {
+			cmtrace_com_tx(&delta,1);
+		}
     }
-
+	stepper_last_pc = frame->return_address;
 	cmtrace_timer_irq_ack();
 	
 	if(!stepper_end_done || CMTRACE_TRACE_CALLER){

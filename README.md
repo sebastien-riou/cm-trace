@@ -12,8 +12,10 @@ It succesfully build on:
 
 Others have not been attempted yet.
 
-It has been tested only Cortex-M3 and Cortex-M4. Both are working reasonably well on small functions. For large functions, a random failure
-gets in the way. That bug is under investigation, I intend to fix it. 
+It has been tested only Cortex-M3 and Cortex-M4.
+
+## Performances
+Tracing 140k cycles takes about 22 minutes, that's a rate of 106 cycles/s (but the rate is not constant in practice, it decreases over time).
 
 ## Overview
 - In the embedded code:
@@ -38,6 +40,17 @@ Function traced in the example:
    6:	fba0 0202 	umull	r0, r2, r0, r2
    a:	4411      	add	r1, r2
    c:	4770      	bx	lr
+````
+
+Example of capture:
+````
+$ pipenv run cmtrace-capture /dev/ttyACM0 /home/sru/STM32CubeIDE/workspace_2.0.0/test-stm32f207/build/test-stm32f207.elf --setup=test_umul64_16_16 umul64
+2026-05-16 13:51:32.486 INFO:	PC=0x08003ec0: 2 muls
+2026-05-16 13:51:32.487 INFO:	PC=0x08003ec2: 2 mla
+2026-05-16 13:51:32.487 INFO:	PC=0x08003ec6: 3 umull
+2026-05-16 13:51:32.487 INFO:	PC=0x08003eca: 1 add
+2026-05-16 13:51:32.488 INFO:	PC=0x08003ecc: 1 bx
+umul64: 5 instructions, 9 cycles
 ````
 
 Example of output highlighting the difference between Cortex-M3 (STM32F207) and Cortex-M4 (STM32F411) for `umull` instruction :
@@ -93,4 +106,5 @@ $ pipenv run cmtrace-dump test-stm32f411.elf-test_umul64_32_16.cmtrace
     - return to step 2
 
 ### Logging concept
-Simply send 32 bit address and cycle number over UART (yes that's a bit redundant)
+- If the address is close enough to the previous one, send just one byte representing the delta.
+- Overwise, send 32 bit cycle number and 32 bit address 

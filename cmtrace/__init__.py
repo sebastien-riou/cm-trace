@@ -396,30 +396,41 @@ class CmTrace:
                 if is_setup:
                     ins_cnt_setup += 1
                     logging.debug(
-                        f"PC={last_pc:#08x}: {last_pc_cycles} {self._image.addresses[last_pc]['ins']} (setup)"
+                        f"PC=0x{last_pc:08x}: {last_pc_cycles} {self._image.addresses[last_pc]['ins']} (setup)"
                     )
                 else:
                     ins_cnt += 1
-                    logging.info(f"PC={last_pc:#08x}: {last_pc_cycles} {self._image.addresses[last_pc]['ins']}")
+                    logging.info(f"PC=0x{last_pc:08x}: {last_pc_cycles} {self._image.addresses[last_pc]['ins']}")
                     f_write32(last_pc)
                     f_write32(last_pc_cycles)
 
             while True:
-                cy = device_read32()
-                if cy == 0xFFFFFFFF:
-                    logging.debug('Received 0xFFFFFFFF, exit')
-                    break
-                if cy != cnt:
-                    raise RuntimeError(f'cnt={cnt}, cy={cy} ({cy:#08x})\n{Utils.hexstr(rx_log)}')
-                pc = device_read32()
-                logging.debug(f'PC={pc:#08x}, cycle {cy}')
+                r = device_read(1)[0]
+                logging.debug(f'cnt={cnt}, r=0x{r:02x}')
+                match r:
+                    case 0xFF:
+                        logging.debug('Received 0xFF, exit')
+                        device_read(3)
+                        break
+                    case 0xFE:
+                        cy = int.from_bytes(device_read(3),byteorder='little')
+                        if cy == 0xFFFFFF:
+                            logging.debug('Received 0xFFFFFF, exit')
+                            break
+                        if cy != cnt:
+                            raise RuntimeError(f'cnt={cnt}, cy={cy} (0x{cy:08x})\n{Utils.hexstr(rx_log)}')
+                        pc = device_read32()
+                    case _:
+                        cy = cnt
+                        pc = last_pc + r - 0x40
+                logging.debug(f'PC=0x{pc:08x}, cycle {cy}')
                 if last_pc and last_pc != pc:
                     add_instruction()
                     if pc == self._func_start:
                         is_setup = False
                         ra_in_setup = last_pc + self._image.addresses[last_pc]['size']
                         logging.debug(f'{self._image.addresses[last_pc]}')
-                        logging.debug(f'ra_in_setup={ra_in_setup:#08x}')
+                        logging.debug(f'ra_in_setup=0x{ra_in_setup:08x}')
                     if pc == ra_in_setup:
                         is_setup = True
                     last_cnt = cnt
