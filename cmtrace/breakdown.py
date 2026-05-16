@@ -1,8 +1,8 @@
 import argparse
-
 import logging
-from cmtrace import CmTrace, CustomScale
 import os
+
+from cmtrace import CmTrace
 
 
 def main():
@@ -11,8 +11,7 @@ def main():
     levels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
     parser.add_argument('--log-level', default='INFO', choices=levels)
     parser.add_argument('trace_path', metavar='trace-path', help='Path to the trace file', type=str)
-    
-    
+
     args = parser.parse_args()
 
     logformat = '%(asctime)s.%(msecs)03d %(levelname)s:\t%(message)s'
@@ -21,7 +20,7 @@ def main():
 
     trace = CmTrace.from_file(args.trace_path)
     logging.debug(f'{trace.instruction_count} instructions, {trace.total_cycles} cycles')
-    
+
     trace.breakdown()
 
 

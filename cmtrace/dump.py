@@ -44,14 +44,25 @@ def main():
             first_addr = int(args.scale_first_addr, 16)
         if args.scale_last_addr is not None:
             last_addr = int(args.scale_last_addr, 16)
-        scale = CustomScale(args.custom_scale, args.scale_start, args.scale_end, list(trace.get_records()), 
-                            sep=args.scale_sep,
-                            first_address=first_addr, last_address=last_addr)
-    trace.dump(custom_scale=scale, sep=args.scale_sep, function=args.function,
-               first_cycle=args.first_cycle, last_cycle=args.last_cycle,
-               first_ins=args.first_instruction, last_ins=args.last_instruction,
-               deep=args.deep
-               )
+        scale = CustomScale(
+            args.custom_scale,
+            args.scale_start,
+            args.scale_end,
+            list(trace.get_records()),
+            sep=args.scale_sep,
+            first_address=first_addr,
+            last_address=last_addr,
+        )
+    trace.dump(
+        custom_scale=scale,
+        sep=args.scale_sep,
+        function=args.function,
+        first_cycle=args.first_cycle,
+        last_cycle=args.last_cycle,
+        first_ins=args.first_instruction,
+        last_ins=args.last_instruction,
+        deep=args.deep,
+    )
 
 
 if __name__ == '__main__':

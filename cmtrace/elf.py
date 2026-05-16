@@ -32,8 +32,7 @@ class Elf:
     def get_tmp_file():
         file = os.path.join(tempfile.mkdtemp(), 'elf.tmp')
         return file
-    
-    
+
     def read_file_format(self):
         outstr = self.objdump(self._elf_file, '-a')
         info_line = r'\s*\S+:\s+file format\s+(\S+)'
@@ -177,7 +176,7 @@ class Elf:
                         funcs = [current_func]
                         if current_func in aliases:
                             funcs += aliases[current_func]
-                    #else:
+                    # else:
                     #    funcs = []
                     addresses[addr] = {
                         'code': code,
@@ -246,16 +245,16 @@ class Elf:
     @staticmethod
     def from_bytes(elf_as_bytes: bytes, *, binutils_prefix='riscv-none-elf-'):
         tmp = Elf.get_tmp_file()
-        with open(tmp,'wb') as f:
+        with open(tmp, 'wb') as f:
             f.write(elf_as_bytes)
-        return Elf(tmp,binutils_prefix)
-    
-    def __init__(self, elf:str|bytes, *, binutils_prefix='riscv-none-elf-'):
+        return Elf(tmp, binutils_prefix)
+
+    def __init__(self, elf: str | bytes, *, binutils_prefix='riscv-none-elf-'):
         if isinstance(elf, str):
             self._elf_file = elf
         else:
             self._elf_file = Elf.get_tmp_file()
-            with open(self._elf_file,'wb') as f:
+            with open(self._elf_file, 'wb') as f:
                 f.write(elf)
             logging.debug(f'tmp file: {self._elf_file}')
         self._binutils_prefix = binutils_prefix
