@@ -18,6 +18,11 @@ def main():
     parser.add_argument('--scale-last-addr', help='Last address of the scale', type=str)
     parser.add_argument('--scale-sep', default='|', help='Separator for the columns', type=str)
     parser.add_argument('--function', default=None, help='Select a function', type=str)
+    parser.add_argument('--deep', default=True, help='Dump sub-functions', type=int)
+    parser.add_argument('--first-cycle', default=None, help='Specify the first cycle to dump', type=int)
+    parser.add_argument('--last-cycle', default=None, help='Specify the last cycle to dump', type=int)
+    parser.add_argument('--first-instruction', default=None, help='Specify the first instruction to dump', type=int)
+    parser.add_argument('--last-instruction', default=None, help='Specify the last instruction to dump', type=int)
 
     args = parser.parse_args()
 
@@ -42,7 +47,11 @@ def main():
         scale = CustomScale(args.custom_scale, args.scale_start, args.scale_end, list(trace.get_records()), 
                             sep=args.scale_sep,
                             first_address=first_addr, last_address=last_addr)
-    trace.dump(custom_scale=scale, sep=args.scale_sep, function=args.function)
+    trace.dump(custom_scale=scale, sep=args.scale_sep, function=args.function,
+               first_cycle=args.first_cycle, last_cycle=args.last_cycle,
+               first_ins=args.first_instruction, last_ins=args.last_instruction,
+               deep=args.deep
+               )
 
 
 if __name__ == '__main__':
