@@ -39,6 +39,7 @@ doc = [
 [project.scripts]
 cmtrace-capture = "cmtrace.capture:main"
 cmtrace-dump = "cmtrace.dump:main"
+cmtrace-breakdown = "cmtrace.breakdown:main"
 
 [tool.black]
 target-version = ["py310"]
@@ -104,6 +105,7 @@ ban-relative-imports = "all"
 # CLI can print
 "cmtrace/capture.py" = ["T201"]
 "cmtrace/dump.py" = ["T201","I001"]
+"cmtrace/breakdown.py" = ["T201"]
 
 [tool.mypy]
 disallow_untyped_defs = false
