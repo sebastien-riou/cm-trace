@@ -27,8 +27,8 @@ cp -R libcmtrace/include $OUT
 cp -R libcmtrace/source $OUT
 mv build $OUT
 git status
-git diff package.json
-sha256sum package.json
+#git diff package.json
+#sha256sum package.json
 git describe --tags --always --dirty --match "v*" > $OUT/version.txt
 cd dist/$PRESET
 OUT_FILE=libcmtrace-$PRESET.tar.gz

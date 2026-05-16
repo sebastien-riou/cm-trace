@@ -1,5 +1,6 @@
 build/
 dist/
+cmtrace.tar.gz
 __pycache__/
 *.log
 *.cmtrace

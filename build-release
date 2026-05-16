@@ -8,5 +8,5 @@ echo "INFO: Creating release archive ${NAME}.tar.gz"
 
 ./build-all-targets debug
 ./build-all-targets minSizeRel
-cp -R libcmtrace-test dist
+#cp -R libcmtrace-test dist
 tar czf ${NAME}.tar.gz dist
