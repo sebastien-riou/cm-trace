@@ -14,6 +14,9 @@ Others have not been attempted yet.
 
 It has been tested only Cortex-M3 and Cortex-M4.
 
+Example projects:
+- [STM32F207 (Cortex-M3)](https://github.com/sebastien-riou/cm-trace-stm32f207)
+
 ## Performances
 Tracing 140k cycles takes about 22 minutes, that's a rate of 106 cycles/s (but the rate is not constant in practice, it decreases over time).
 
@@ -30,7 +33,9 @@ Tracing 140k cycles takes about 22 minutes, that's a rate of 106 cycles/s (but t
     - Invoke `cmtrace_trace_loop` in your app
 - On host computer:
     - Invoke the python script `cmtrace-capture`: it communicates with `cmtrace_trace_loop` and create a trace file on the host computer
-    - Invoke the python script `cmtrace-dump` to read back the trace file
+    - Invoke the python scripts to analyze the trace:
+        - `cmtrace-dump`: dump all or a part of the trace
+        - `cmtrace-breakdown`: report the cycles spent in each function
 
 Function traced in the example:
 ````
